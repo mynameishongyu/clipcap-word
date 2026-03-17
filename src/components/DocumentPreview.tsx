@@ -17,6 +17,7 @@ interface DocumentPreviewProps {
   onCreateTextSelection: (segment: TextSegment, startOffset: number, endOffset: number) => void;
   onPickImage: (segment: ImageSegment) => void;
   onSelectSlotOccurrence: (slotId: string, occurrenceId?: string) => void;
+  onSelectionRejected?: (message: string) => void;
 }
 
 interface TextDecoration {
@@ -26,6 +27,21 @@ interface TextDecoration {
   start: number;
   end: number;
 }
+
+const previewContainerClassName =
+  "max-h-[760px] overflow-auto rounded-lg border border-[var(--mantine-color-dark-4)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,247,248,0.98)),linear-gradient(90deg,transparent_71px,rgba(134,142,150,0.08)_72px,transparent_73px)] p-[clamp(18px,2vw,28px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]";
+const previewEmptyStateClassName =
+  "grid min-h-[260px] place-content-center gap-2 rounded-lg border border-dashed border-[var(--mantine-color-dark-4)] bg-white/3 p-[clamp(18px,2vw,28px)] text-center";
+const paragraphClassName = "mb-3 min-h-6 leading-[1.65] text-[#111827]";
+const slotChipBaseClassName =
+  "cursor-pointer rounded-lg bg-[rgba(206,212,218,0.88)] shadow-[inset_0_-1px_0_rgba(73,80,87,0.16)]";
+const slotChipActiveClassName = "bg-[rgba(173,181,189,0.98)]";
+const docImageBaseClassName =
+  "mx-1 inline-flex items-center justify-center rounded-[10px] border border-[rgba(173,181,189,0.9)] bg-white p-1.5 transition";
+const docImageActiveClassName =
+  "border-[rgba(73,80,87,0.9)] shadow-[0_0_0_1px_rgba(73,80,87,0.2)]";
+const docTableClassName = "w-full border-collapse";
+const docTableCellClassName = "border border-[rgba(206,212,218,0.88)] p-2.5 align-top text-[#111827]";
 
 function textStyleToCss(style: TextStyleSnapshot) {
   return {
@@ -131,7 +147,7 @@ function renderTextContent(
     pieces.push(
       <span
         key={decoration.occurrenceId}
-        className={`slot-chip${isActive ? " is-active" : ""}`}
+        className={`${slotChipBaseClassName} ${isActive ? slotChipActiveClassName : ""}`}
         title={decoration.slotName}
         onClick={(event) => {
           event.stopPropagation();
@@ -169,8 +185,8 @@ function PreviewParagraph({
   onSelectSlotOccurrence: (slotId: string, occurrenceId?: string) => void;
 }) {
   return (
-    <p className="doc-paragraph" style={{ textAlign: block.align }}>
-      {block.segments.length === 0 ? <span className="doc-empty-line">&nbsp;</span> : null}
+    <p className={paragraphClassName} style={{ textAlign: block.align }}>
+      {block.segments.length === 0 ? <span className="inline-block min-h-6">&nbsp;</span> : null}
       {block.segments.map((segment) => {
         if (segment.type === "text") {
           const key = locatorKey(
@@ -182,7 +198,7 @@ function PreviewParagraph({
           return (
             <span
               key={segment.id}
-              className="doc-text-segment"
+              className="whitespace-pre-wrap"
               data-text-segment-id={segment.id}
               style={textStyleToCss(segment.style)}
             >
@@ -205,7 +221,7 @@ function PreviewParagraph({
         return (
           <button
             key={segment.id}
-            className={`doc-image${isActive ? " is-active" : ""}`}
+            className={`${docImageBaseClassName} ${isActive ? docImageActiveClassName : "hover:border-[rgba(73,80,87,0.9)] hover:shadow-[0_0_0_1px_rgba(73,80,87,0.2)]"}`}
             title={decoration ? decoration.slotName : "点击创建图片槽位"}
             type="button"
             onClick={() => {
@@ -251,12 +267,12 @@ function PreviewTable(props: {
   } = props;
 
   return (
-    <table className="doc-table">
+    <table className={docTableClassName}>
       <tbody>
         {block.rows.map((row) => (
           <tr key={row.id}>
             {row.cells.map((cell) => (
-              <td key={cell.id}>
+              <td key={cell.id} className={docTableCellClassName}>
                 <PreviewBlocks
                   blocks={cell.blocks}
                   textDecorations={textDecorations}
@@ -324,6 +340,7 @@ export function DocumentPreview(props: DocumentPreviewProps) {
     onCreateTextSelection,
     onPickImage,
     onSelectSlotOccurrence,
+    onSelectionRejected,
   } = props;
 
   const textDecorations = collectTextDecorations(slots);
@@ -378,12 +395,21 @@ export function DocumentPreview(props: DocumentPreviewProps) {
     const anchorSegment = anchorElement?.closest<HTMLElement>("[data-text-segment-id]");
     const focusSegment = focusElement?.closest<HTMLElement>("[data-text-segment-id]");
 
-    if (!anchorSegment || !focusSegment || anchorSegment !== focusSegment) {
+    if (!anchorSegment || !focusSegment) {
+      onSelectionRejected?.("当前选区不在可创建槽位的文本片段内。");
+      return;
+    }
+
+    if (anchorSegment !== focusSegment) {
+      onSelectionRejected?.(
+        "当前选区跨越了多个 Word 文本片段。源文档里这段文字通常被拆成了多个 run，所以不会触发右侧“待创建槽位”。",
+      );
       return;
     }
 
     const segment = textSegmentIndex.get(anchorSegment.dataset.textSegmentId ?? "");
     if (!segment) {
+      onSelectionRejected?.("当前选区无法映射到可创建槽位的文本片段。");
       return;
     }
 
@@ -402,15 +428,17 @@ export function DocumentPreview(props: DocumentPreviewProps) {
 
   if (!document) {
     return (
-      <div className="preview-empty-state">
-        <h3>先上传一个 .docx 模板</h3>
-        <p>解析完成后，这里会显示可选中文本和占位图片。</p>
+      <div className={previewEmptyStateClassName}>
+        <h3 className="m-0 text-base text-[var(--mantine-color-gray-0)]">先上传一个 .docx 模板</h3>
+        <p className="m-0 text-[0.95rem] text-[var(--mantine-color-dimmed)]">
+          解析完成后，这里会显示可选中文本和占位图片。
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="document-preview" onMouseUp={handleMouseUp}>
+    <div className={previewContainerClassName} onMouseUp={handleMouseUp}>
       <PreviewBlocks
         blocks={document.blocks}
         textDecorations={textDecorations}

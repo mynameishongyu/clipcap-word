@@ -62,7 +62,12 @@ const VIEW_META: Record<
   },
 };
 
-function confirmAction(title: string, message: string, onConfirm: () => void) {
+function confirmAction(
+  title: string,
+  message: string,
+  onConfirm: () => void,
+  options?: { destructive?: boolean },
+) {
   modals.openConfirmModal({
     title,
     centered: true,
@@ -70,6 +75,17 @@ function confirmAction(title: string, message: string, onConfirm: () => void) {
       confirm: "确认",
       cancel: "取消",
     },
+    cancelProps: {
+      variant: "default",
+    },
+    confirmProps: options?.destructive
+      ? {
+          color: "red",
+          variant: "filled",
+        }
+      : {
+          variant: "white",
+        },
     children: (
       <Text c="dimmed" size="sm">
         {message}
@@ -88,12 +104,12 @@ function DashboardMetricCard(props: {
   const { label, value, description, compactValue = false } = props;
 
   return (
-    <Paper className="metric-card" p="lg" radius="lg" withBorder>
+    <Paper className="min-h-[164px]" p="lg" radius="lg" withBorder>
       <Stack gap={8}>
         <Text c="dimmed" fw={700} size="xs" tt="uppercase">
           {label}
         </Text>
-        <Text className="metric-value" ff="monospace" fw={700} size={compactValue ? "lg" : "xl"}>
+        <Text className="break-words leading-none" ff="monospace" fw={700} size={compactValue ? "lg" : "xl"}>
           {value}
         </Text>
         <Text c="dimmed" size="sm">
@@ -177,7 +193,7 @@ function TemplateBoard(props: {
                   <Button variant="default" onClick={() => onDuplicate(template.id)}>
                     复制
                   </Button>
-                  <Button variant="subtle" onClick={() => onDelete(template.id)}>
+                  <Button color="red" variant="filled" onClick={() => onDelete(template.id)}>
                     删除
                   </Button>
                 </Group>
@@ -298,10 +314,10 @@ export default function App() {
   const currentViewMeta = VIEW_META[activeView];
 
   return (
-    <Container className="app-shell" fluid px={{ base: "md", md: "xl" }} py="xl">
+    <Container className="min-h-screen" fluid px={{ base: "md", md: "xl" }} py="xl">
       <Grid align="start" gutter="lg">
         <Grid.Col span={{ base: 12, lg: 3 }}>
-          <Stack className="sidebar-sticky" gap="lg">
+          <Stack className="lg:sticky lg:top-6" gap="lg">
             <Paper p="md" radius="lg" withBorder>
               <Stack gap="xs">
                 <Text c="dimmed" fw={700} size="xs" tt="uppercase">
@@ -310,6 +326,7 @@ export default function App() {
                 {(Object.entries(VIEW_META) as Array<[View, (typeof VIEW_META)[View]]>).map(
                   ([view, meta]) => (
                     <NavLink
+                      className="rounded-md"
                       key={view}
                       active={activeView === view}
                       description={meta.navCaption}
@@ -330,8 +347,8 @@ export default function App() {
                   本地缓存
                 </Text>
 
-                <div className="stats-list">
-                  <div className="stats-row">
+                <div className="divide-y divide-[var(--mantine-color-dark-4)]">
+                  <div className="flex items-center justify-between gap-4 py-2.5 first:pt-0">
                     <Text c="dimmed" size="sm">
                       模板
                     </Text>
@@ -339,7 +356,7 @@ export default function App() {
                       {stats.templateCount}
                     </Text>
                   </div>
-                  <div className="stats-row">
+                  <div className="flex items-center justify-between gap-4 py-2.5">
                     <Text c="dimmed" size="sm">
                       任务
                     </Text>
@@ -347,7 +364,7 @@ export default function App() {
                       {stats.taskCount}
                     </Text>
                   </div>
-                  <div className="stats-row">
+                  <div className="flex items-center justify-between gap-4 py-2.5 last:pb-0">
                     <Text c="dimmed" size="sm">
                       产物
                     </Text>
@@ -359,8 +376,9 @@ export default function App() {
 
                 <Button
                   fullWidth
+                  color="red"
                   loading={isClearingHistory}
-                  variant="light"
+                  variant="filled"
                   onClick={() =>
                     confirmAction(
                       "清除缓存数据",
@@ -368,6 +386,7 @@ export default function App() {
                       () => {
                         void handleClearHistory();
                       },
+                      { destructive: true },
                     )
                   }
                 >
@@ -436,6 +455,7 @@ export default function App() {
                     () => {
                       void handleDeleteTemplate(templateId);
                     },
+                    { destructive: true },
                   )
                 }
                 onDuplicate={(templateId) => {
@@ -463,6 +483,7 @@ export default function App() {
                     () => {
                       void handleDeleteTask(taskId);
                     },
+                    { destructive: true },
                   )
                 }
                 tasks={tasks}

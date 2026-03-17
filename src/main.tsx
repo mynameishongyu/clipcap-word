@@ -1,11 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createTheme, MantineProvider } from "@mantine/core";
+import { Button, createTheme, MantineProvider } from "@mantine/core";
 import { ModalsProvider } from "@mantine/modals";
 import { Notifications } from "@mantine/notifications";
 import App from "./App";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
+import "./styles.css";
 
 const container = document.getElementById("root");
 
@@ -16,6 +17,13 @@ if (!container) {
 const theme = createTheme({
   primaryColor: "gray",
   defaultRadius: "md",
+  components: {
+    Button: Button.extend({
+      defaultProps: {
+        variant: "white",
+      },
+    }),
+  },
 });
 
 createRoot(container).render(

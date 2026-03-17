@@ -165,6 +165,7 @@ export function TemplateEditor(props: TemplateEditorProps) {
     setPendingSelection(selection);
     setActiveSlotId(null);
     setFocusedOccurrenceId(null);
+    setError("");
     setSelectionSlotName(
       selection.type === "text" ? selection.selectedText.trim() : "图片槽位",
     );
@@ -500,7 +501,7 @@ export function TemplateEditor(props: TemplateEditorProps) {
                 <div>
                   <Title order={4}>文档预览</Title>
                   <Text c="dimmed" size="sm">
-                    文字只支持在单个文本段内选中并创建槽位。
+                    文字只支持在单个 Word 文本片段内选中并创建槽位。
                   </Text>
                 </div>
               </Group>
@@ -536,6 +537,9 @@ export function TemplateEditor(props: TemplateEditorProps) {
                       type: "image",
                       segment,
                     });
+                  }}
+                  onSelectionRejected={(message) => {
+                    setError(message);
                   }}
                   onSelectSlotOccurrence={selectExistingSlot}
                   slots={slots}
@@ -589,9 +593,9 @@ export function TemplateEditor(props: TemplateEditorProps) {
                   <Text c="dimmed" size="sm">
                     选中文本或点击图片后，这里会显示创建表单。
                   </Text>
-                ) : (
+                    ) : (
                   <Stack gap="md">
-                    <Paper className="selection-card" p="md" radius="md" withBorder>
+                    <Paper className="bg-white/3" p="md" radius="md" withBorder>
                       <Stack gap={6}>
                         <Badge variant="light">
                           {pendingSelection.type === "text" ? "文本槽位" : "图片槽位"}
@@ -657,11 +661,15 @@ export function TemplateEditor(props: TemplateEditorProps) {
                     {sortedSlots.map((slot) => (
                       <UnstyledButton
                         key={slot.id}
-                        className={`slot-row${slot.id === activeSlotId ? " is-active" : ""}`}
+                        className={`block w-full rounded-md border border-[var(--mantine-color-dark-4)] px-4 py-3 text-left transition ${
+                          slot.id === activeSlotId
+                            ? "border-[var(--mantine-color-dark-2)] bg-white/5"
+                            : "bg-white/[0.02] hover:-translate-y-px hover:border-[var(--mantine-color-dark-2)] hover:bg-white/5"
+                        }`}
                         onClick={() => selectExistingSlot(slot.id)}
                       >
                         <Group align="center" justify="space-between" wrap="nowrap">
-                          <div className="slot-row-copy">
+                          <div className="grid min-w-0 gap-1">
                             <Text fw={600}>{slot.name}</Text>
                             <Text c="dimmed" size="sm">
                               {slot.type === "text" ? "文本" : "图片"} · {slot.occurrences.length} 处
@@ -708,13 +716,13 @@ export function TemplateEditor(props: TemplateEditorProps) {
 
                     <Group gap="sm">
                       <Button onClick={handleSaveActiveSlot}>更新槽位</Button>
-                      <Button variant="default" onClick={() => handleDeleteSlot(activeSlot.id)}>
+                      <Button color="red" variant="filled" onClick={() => handleDeleteSlot(activeSlot.id)}>
                         删除槽位
                       </Button>
                     </Group>
 
                     {focusedOccurrenceId ? (
-                      <Button variant="subtle" onClick={handleDeleteOccurrence}>
+                      <Button color="red" variant="filled" onClick={handleDeleteOccurrence}>
                         删除当前选中的出现位置
                       </Button>
                     ) : null}

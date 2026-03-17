@@ -113,7 +113,7 @@ export function TaskCenter(props: TaskCenterProps) {
                       >
                         {isExpanded ? "收起" : "查看详情"}
                       </Button>
-                      <Button variant="subtle" onClick={() => onDeleteTask(task.id)}>
+                      <Button color="red" variant="filled" onClick={() => onDeleteTask(task.id)}>
                         删除任务
                       </Button>
                     </Group>
@@ -173,11 +173,11 @@ export function TaskCenter(props: TaskCenterProps) {
                       {docxArtifacts.map((artifact) => (
                         <UnstyledButton
                           key={artifact.id}
-                          className="artifact-row"
+                          className="block w-full rounded-md border border-[var(--mantine-color-dark-4)] bg-white/[0.02] px-4 py-3 text-left transition hover:-translate-y-px hover:border-[var(--mantine-color-dark-2)] hover:bg-white/5"
                           onClick={() => downloadBlob(artifact.blob, artifact.fileName)}
                         >
                           <Group align="center" justify="space-between" wrap="nowrap">
-                            <div className="artifact-copy">
+                            <div className="grid min-w-0 gap-1">
                               <Text fw={600}>文档</Text>
                               <Text c="dimmed" size="sm">
                                 {artifact.fileName}

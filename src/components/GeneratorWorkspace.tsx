@@ -46,6 +46,14 @@ interface GeneratorWorkspaceProps {
   onTaskCreated: (taskId: string) => void;
 }
 
+const dataGridTableClassName = "min-w-[760px] w-full border-collapse";
+const dataGridHeaderCellClassName =
+  "border-b border-r border-[var(--mantine-color-dark-4)] bg-[var(--mantine-color-dark-7)] px-2 py-2 text-left text-sm font-semibold text-[var(--mantine-color-dimmed)] last:border-r-0";
+const dataGridCellClassName =
+  "border-b border-r border-[var(--mantine-color-dark-4)] px-2 py-2 align-top text-[var(--mantine-color-gray-0)] last:border-r-0";
+const dataGridInputClassName =
+  "min-h-[38px] w-full rounded-[var(--mantine-radius-sm)] border border-[var(--mantine-color-dark-4)] bg-[var(--mantine-color-dark-6)] px-2.5 py-2 text-[var(--mantine-color-gray-0)] transition hover:border-[var(--mantine-color-dark-2)] focus:border-[var(--mantine-color-gray-6)] focus:bg-[var(--mantine-color-dark-5)] focus:outline-none";
+
 function blankRow(columnCount: number): DatasetRowDraft {
   return {
     id: makeId("row"),
@@ -421,15 +429,15 @@ export function GeneratorWorkspace(props: GeneratorWorkspaceProps) {
           {!dataset ? (
             <Text c="dimmed">导入表格文件后可在这里修改列头和数据行。</Text>
           ) : (
-            <div className="table-shell">
-              <table className="data-grid">
-                <thead>
+            <div className="overflow-auto rounded-lg border border-[var(--mantine-color-dark-4)]">
+              <table className={dataGridTableClassName}>
+                <thead className="sticky top-0 z-[1] bg-[var(--mantine-color-dark-7)]">
                   <tr>
-                    <th className="index-col">#</th>
+                    <th className={`${dataGridHeaderCellClassName} w-[88px]`}>#</th>
                     {dataset.columns.map((column, columnIndex) => (
-                      <th key={`${columnIndex}-${column}`}>
+                      <th key={`${columnIndex}-${column}`} className={dataGridHeaderCellClassName}>
                         <input
-                          className="grid-input"
+                          className={dataGridInputClassName}
                           value={column}
                           onChange={(event) => {
                             const nextColumns = [...dataset.columns];
@@ -443,21 +451,23 @@ export function GeneratorWorkspace(props: GeneratorWorkspaceProps) {
                         />
                       </th>
                     ))}
-                    <th className="action-col">操作</th>
+                    <th className={`${dataGridHeaderCellClassName} w-[88px]`}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dataset.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
-                      <td className="index-col">{rowIndex + 2}</td>
+                      <td className={`${dataGridCellClassName} w-[88px]`}>{rowIndex + 2}</td>
                       {row.cells.map((cell, columnIndex) => {
                         const cellIssue = validationIssues.find(
                           (issue) => issue.rowNumber === rowIndex + 2 && issue.severity === "error",
                         );
                         return (
-                          <td key={`${row.id}-${columnIndex}`} className={cellIssue ? "has-error" : ""}>
+                          <td key={`${row.id}-${columnIndex}`} className={dataGridCellClassName}>
                             <input
-                              className="grid-input"
+                              className={`${dataGridInputClassName} ${
+                                cellIssue ? "border-[var(--mantine-color-red-7)]" : ""
+                              }`}
                               value={cell}
                               onChange={(event) => {
                                 const nextRows = dataset.rows.map((candidate) => ({
@@ -484,10 +494,11 @@ export function GeneratorWorkspace(props: GeneratorWorkspaceProps) {
                           </td>
                         );
                       })}
-                      <td className="action-col">
+                      <td className={`${dataGridCellClassName} w-[88px]`}>
                         <Button
+                          color="red"
                           size="xs"
-                          variant="subtle"
+                          variant="filled"
                           onClick={() => {
                             setDataset({
                               ...dataset,
