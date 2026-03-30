@@ -6,8 +6,8 @@ import type {
   ImagePackEntry,
   ImageSlotOccurrence,
   Slot,
+  TextLocator,
   TemplateVersionRecord,
-  TextSlotOccurrence,
   ValidationIssue,
 } from "../../types";
 import { normalizeFileName, normalizeToken, validateDataset } from "../validation";
@@ -80,12 +80,12 @@ function getSegmentText(run: Element, childStart: number, childEnd: number) {
 
 function replaceSegmentText(
   run: Element,
-  occurrence: TextSlotOccurrence,
+  locator: TextLocator,
   nextText: string,
 ) {
   const children = getElementChildren(run);
-  const targetChildren = children.slice(occurrence.locator.childStart, occurrence.locator.childEnd + 1);
-  const referenceNode = children[occurrence.locator.childEnd + 1] ?? null;
+  const targetChildren = children.slice(locator.childStart, locator.childEnd + 1);
+  const referenceNode = children[locator.childEnd + 1] ?? null;
 
   targetChildren.forEach((child) => {
     run.removeChild(child);
@@ -108,7 +108,7 @@ function replaceSegmentText(
 function groupTextOccurrences(slots: Slot[], valueMap: Map<string, string>) {
   const groups = new Map<
     string,
-    Array<{ occurrence: TextSlotOccurrence; value: string }>
+    Array<{ locator: TextLocator; startOffset: number; endOffset: number; value: string }>
   >();
 
   slots
@@ -121,13 +121,28 @@ function groupTextOccurrences(slots: Slot[], valueMap: Map<string, string>) {
           return;
         }
 
-        const key = `${occurrence.locator.path.join(".")}:${occurrence.locator.childStart}:${occurrence.locator.childEnd}`;
-        const bucket = groups.get(key) ?? [];
-        bucket.push({
-          occurrence,
-          value: replacementValue,
+        const fragments = occurrence.fragments?.length
+          ? occurrence.fragments.map((fragment, index) => ({
+              locator: fragment.locator,
+              startOffset: fragment.startOffset,
+              endOffset: fragment.endOffset,
+              value: index === 0 ? replacementValue : "",
+            }))
+          : [
+              {
+                locator: occurrence.locator,
+                startOffset: occurrence.startOffset,
+                endOffset: occurrence.endOffset,
+                value: replacementValue,
+              },
+            ];
+
+        fragments.forEach((fragment) => {
+          const key = `${fragment.locator.path.join(".")}:${fragment.locator.childStart}:${fragment.locator.childEnd}`;
+          const bucket = groups.get(key) ?? [];
+          bucket.push(fragment);
+          groups.set(key, bucket);
         });
-        groups.set(key, bucket);
       });
     });
 
@@ -246,27 +261,25 @@ async function buildRowDocument(
 
   for (const bucket of textGroups.values()) {
     const [first] = bucket;
-    const run = resolveElementPath(root, first.occurrence.locator.path);
+    const run = resolveElementPath(root, first.locator.path);
     if (!run) {
-      throw new Error(`找不到文本槽位 "${first.occurrence.slotId}" 的定位节点。`);
+      throw new Error("找不到文本槽位的定位节点。");
     }
 
     const segmentText = getSegmentText(
       run,
-      first.occurrence.locator.childStart,
-      first.occurrence.locator.childEnd,
+      first.locator.childStart,
+      first.locator.childEnd,
     );
 
     let nextText = segmentText;
-    const sorted = [...bucket].sort(
-      (left, right) => right.occurrence.startOffset - left.occurrence.startOffset,
-    );
+    const sorted = [...bucket].sort((left, right) => right.startOffset - left.startOffset);
 
-    sorted.forEach(({ occurrence, value }) => {
-      nextText = replaceRange(nextText, occurrence.startOffset, occurrence.endOffset, value);
+    sorted.forEach(({ startOffset, endOffset, value }) => {
+      nextText = replaceRange(nextText, startOffset, endOffset, value);
     });
 
-    replaceSegmentText(run, first.occurrence, nextText);
+    replaceSegmentText(run, first.locator, nextText);
   }
 
   for (const slot of template.slots.filter((candidate) => candidate.type === "image")) {

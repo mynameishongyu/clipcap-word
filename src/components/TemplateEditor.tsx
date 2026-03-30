@@ -25,15 +25,14 @@ import type {
   ParsedDocument,
   Slot,
   TemplateVersionRecord,
-  TextSegment,
+  TextSelectionDraft,
+  TextSlotOccurrence,
 } from "../types";
 
 type PendingSelection =
   | {
       type: "text";
-      segment: TextSegment;
-      startOffset: number;
-      endOffset: number;
+      fragments: TextSelectionDraft["fragments"];
       selectedText: string;
     }
   | {
@@ -53,6 +52,19 @@ function locatorKey(path: number[], childStart?: number, childEnd?: number) {
 
 function rangesOverlap(startA: number, endA: number, startB: number, endB: number) {
   return Math.max(startA, startB) < Math.min(endA, endB);
+}
+
+function occurrenceFragments(occurrence: TextSlotOccurrence) {
+  return occurrence.fragments?.length
+    ? occurrence.fragments
+    : [
+        {
+          locator: occurrence.locator,
+          startOffset: occurrence.startOffset,
+          endOffset: occurrence.endOffset,
+          originalSegmentText: occurrence.originalSegmentText,
+        },
+      ];
 }
 
 export function TemplateEditor(props: TemplateEditorProps) {
@@ -211,32 +223,35 @@ export function TemplateEditor(props: TemplateEditorProps) {
     }
 
     if (pendingSelection.type === "text") {
-      const pendingKey = locatorKey(
-        pendingSelection.segment.locator.path,
-        pendingSelection.segment.locator.childStart,
-        pendingSelection.segment.locator.childEnd,
-      );
-
       const overlap = slots.some((slot) =>
         slot.occurrences.some((occurrence) => {
           if (occurrence.kind !== "textRange") {
             return false;
           }
 
-          const occurrenceKey = locatorKey(
-            occurrence.locator.path,
-            occurrence.locator.childStart,
-            occurrence.locator.childEnd,
-          );
+          return occurrenceFragments(occurrence).some((fragment) =>
+            pendingSelection.fragments.some((pendingFragment) => {
+              const occurrenceKey = locatorKey(
+                fragment.locator.path,
+                fragment.locator.childStart,
+                fragment.locator.childEnd,
+              );
+              const pendingKey = locatorKey(
+                pendingFragment.segment.locator.path,
+                pendingFragment.segment.locator.childStart,
+                pendingFragment.segment.locator.childEnd,
+              );
 
-          return (
-            occurrenceKey === pendingKey &&
-            rangesOverlap(
-              occurrence.startOffset,
-              occurrence.endOffset,
-              pendingSelection.startOffset,
-              pendingSelection.endOffset,
-            )
+              return (
+                occurrenceKey === pendingKey &&
+                rangesOverlap(
+                  fragment.startOffset,
+                  fragment.endOffset,
+                  pendingFragment.startOffset,
+                  pendingFragment.endOffset,
+                )
+              );
+            }),
           );
         }),
       );
@@ -268,16 +283,27 @@ export function TemplateEditor(props: TemplateEditorProps) {
     }
 
     if (pendingSelection.type === "text") {
+      const [firstFragment] = pendingSelection.fragments;
+      if (!firstFragment) {
+        return null;
+      }
+
       return {
         id: makeId("occurrence"),
         slotId,
         kind: "textRange" as const,
-        locator: pendingSelection.segment.locator,
-        startOffset: pendingSelection.startOffset,
-        endOffset: pendingSelection.endOffset,
+        locator: firstFragment.segment.locator,
+        startOffset: firstFragment.startOffset,
+        endOffset: firstFragment.endOffset,
         originalText: pendingSelection.selectedText,
-        originalSegmentText: pendingSelection.segment.text,
-        styleSnapshot: pendingSelection.segment.style,
+        originalSegmentText: firstFragment.segment.text,
+        styleSnapshot: firstFragment.segment.style,
+        fragments: pendingSelection.fragments.map((fragment) => ({
+          locator: fragment.segment.locator,
+          startOffset: fragment.startOffset,
+          endOffset: fragment.endOffset,
+          originalSegmentText: fragment.segment.text,
+        })),
       };
     }
 
@@ -501,7 +527,7 @@ export function TemplateEditor(props: TemplateEditorProps) {
                 <div>
                   <Title order={4}>文档预览</Title>
                   <Text c="dimmed" size="sm">
-                    文字只支持在单个 Word 文本片段内选中并创建槽位。
+                    文字支持在同一段落内跨多个 Word 文本片段选中并创建槽位。
                   </Text>
                 </div>
               </Group>
@@ -517,19 +543,16 @@ export function TemplateEditor(props: TemplateEditorProps) {
                   activeSlotId={activeSlotId}
                   document={parsedDocument}
                   focusedOccurrenceId={focusedOccurrenceId}
-                  onCreateTextSelection={(segment, startOffset, endOffset) => {
-                    const selectedText = segment.text.slice(startOffset, endOffset);
-                    if (!selectedText.trim()) {
+                  onCreateTextSelection={(selection) => {
+                    if (!selection.selectedText.trim()) {
                       setError("请选择实际文本内容，不要只选空白字符。");
                       return;
                     }
 
                     openPendingSelection({
                       type: "text",
-                      segment,
-                      startOffset,
-                      endOffset,
-                      selectedText,
+                      fragments: selection.fragments,
+                      selectedText: selection.selectedText,
                     });
                   }}
                   onPickImage={(segment) => {

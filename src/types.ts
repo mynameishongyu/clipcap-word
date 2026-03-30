@@ -31,6 +31,24 @@ export interface TextLocator {
   childEnd: number;
 }
 
+export interface TextSelectionFragment {
+  locator: TextLocator;
+  startOffset: number;
+  endOffset: number;
+  originalSegmentText: string;
+}
+
+export interface TextSelectionDraftFragment {
+  segment: TextSegment;
+  startOffset: number;
+  endOffset: number;
+}
+
+export interface TextSelectionDraft {
+  selectedText: string;
+  fragments: TextSelectionDraftFragment[];
+}
+
 export interface ImageLocator {
   path: number[];
   relId: string;
@@ -47,6 +65,7 @@ export interface TextSlotOccurrence {
   originalText: string;
   originalSegmentText: string;
   styleSnapshot: TextStyleSnapshot;
+  fragments?: TextSelectionFragment[];
 }
 
 export interface ImageSlotOccurrence {

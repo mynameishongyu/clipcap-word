@@ -80,6 +80,79 @@ async function createSampleDocx() {
   });
 }
 
+async function createRevisionAwareDocx() {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`,
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`,
+  );
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:r>
+        <w:t>应用</w:t>
+        <w:commentReference w:id="0"/>
+        <w:t>场景</w:t>
+      </w:r>
+      <w:bookmarkStart w:id="1" w:name="bookmark_1"/>
+      <w:r>
+        <w:t>建设</w:t>
+      </w:r>
+      <w:bookmarkEnd w:id="1"/>
+      <w:ins w:id="2" w:author="tester" w:date="2026-03-17T00:00:00Z">
+        <w:r>
+          <w:t>方案</w:t>
+        </w:r>
+      </w:ins>
+      <w:del w:id="3" w:author="tester" w:date="2026-03-17T00:00:00Z">
+        <w:r>
+          <w:delText>废弃文本</w:delText>
+        </w:r>
+      </w:del>
+    </w:p>
+  </w:body>
+</w:document>`,
+  );
+  zip.file(
+    "word/_rels/document.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`,
+  );
+
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const arrayBuffer = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+  return new Blob([arrayBuffer], {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+}
+
+function paragraphText(block: { type: "paragraph"; segments: Array<TextSegment | ImageSegment> }) {
+  return block.segments
+    .filter((segment): segment is TextSegment => segment.type === "text")
+    .map((segment) => segment.text)
+    .join("");
+}
+
 describe("docx flow", () => {
   it("parses a docx and generates a new docx with text and image replacements", async () => {
     const docxBlob = await createSampleDocx();
@@ -273,5 +346,91 @@ describe("docx flow", () => {
     expect(result.errors[0]?.message).toContain("第 2 行");
 
     releaseParsedDocument(parsed);
+  });
+
+  it("ignores comment markers and revisions when a text slot spans multiple runs", async () => {
+    const docxBlob = await createRevisionAwareDocx();
+    const parsed = await parseDocx(docxBlob);
+    const firstParagraph = parsed.blocks[0];
+
+    expect(firstParagraph.type).toBe("paragraph");
+    if (firstParagraph.type !== "paragraph") {
+      throw new Error("expected paragraph");
+    }
+
+    const textSegments = firstParagraph.segments.filter(
+      (segment): segment is TextSegment => segment.type === "text",
+    );
+
+    expect(textSegments.map((segment) => segment.text)).toEqual(["应用场景", "建设", "方案"]);
+    expect(paragraphText(firstParagraph)).toBe("应用场景建设方案");
+
+    const template: TemplateVersionRecord = {
+      id: "template_version_revision",
+      templateId: "template_revision",
+      name: "项目方案",
+      version: 1,
+      sourceDocxBlob: docxBlob,
+      sourceDocxName: "revision.docx",
+      createdAt: new Date().toISOString(),
+      slots: [
+        {
+          id: "slot_topic",
+          name: "主题",
+          type: "text",
+          required: true,
+          occurrences: [
+            {
+              id: "occ_topic",
+              slotId: "slot_topic",
+              kind: "textRange",
+              locator: textSegments[0]!.locator,
+              startOffset: 0,
+              endOffset: textSegments[0]!.text.length,
+              originalText: "应用场景建设方案",
+              originalSegmentText: textSegments[0]!.text,
+              styleSnapshot: textSegments[0]!.style,
+              fragments: textSegments.map((segment) => ({
+                locator: segment.locator,
+                startOffset: 0,
+                endOffset: segment.text.length,
+                originalSegmentText: segment.text,
+              })),
+            },
+          ],
+        },
+      ],
+    };
+
+    const dataset: DatasetDraft = {
+      id: "dataset_revision",
+      name: "revisions",
+      sourceXlsxBlob: new Blob(["placeholder"]),
+      columns: ["主题", "file_name"],
+      rows: [{ id: "row_1", cells: ["落地计划", "项目方案-落地计划"] }],
+      imagePackEntries: [],
+      validationIssues: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const result = await generateDocuments(template, dataset);
+
+    expect(result.status).toBe("completed");
+    expect(result.errors).toEqual([]);
+    expect(result.successFiles).toHaveLength(1);
+
+    const generatedParsed = await parseDocx(result.successFiles[0]!.blob);
+    const generatedFirstParagraph = generatedParsed.blocks[0];
+
+    expect(generatedFirstParagraph.type).toBe("paragraph");
+    if (generatedFirstParagraph.type !== "paragraph") {
+      throw new Error("expected paragraph");
+    }
+
+    expect(paragraphText(generatedFirstParagraph)).toBe("落地计划");
+
+    releaseParsedDocument(parsed);
+    releaseParsedDocument(generatedParsed);
   });
 });

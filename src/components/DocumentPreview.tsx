@@ -5,7 +5,9 @@ import type {
   ImageSegment,
   ParsedDocument,
   Slot,
+  TextSelectionDraft,
   TextSegment,
+  TextSlotOccurrence,
   TextStyleSnapshot,
 } from "../types";
 
@@ -14,7 +16,7 @@ interface DocumentPreviewProps {
   slots: Slot[];
   activeSlotId?: string | null;
   focusedOccurrenceId?: string | null;
-  onCreateTextSelection: (segment: TextSegment, startOffset: number, endOffset: number) => void;
+  onCreateTextSelection: (selection: TextSelectionDraft) => void;
   onPickImage: (segment: ImageSegment) => void;
   onSelectSlotOccurrence: (slotId: string, occurrenceId?: string) => void;
   onSelectionRejected?: (message: string) => void;
@@ -60,6 +62,19 @@ function locatorKey(path: number[], childStart?: number, childEnd?: number) {
   return `${path.join(".")}:${childStart ?? ""}:${childEnd ?? ""}`;
 }
 
+function occurrenceFragments(occurrence: TextSlotOccurrence) {
+  return occurrence.fragments?.length
+    ? occurrence.fragments
+    : [
+        {
+          locator: occurrence.locator,
+          startOffset: occurrence.startOffset,
+          endOffset: occurrence.endOffset,
+          originalSegmentText: occurrence.originalSegmentText,
+        },
+      ];
+}
+
 function collectTextDecorations(slots: Slot[]) {
   const map = new Map<string, TextDecoration[]>();
 
@@ -69,20 +84,22 @@ function collectTextDecorations(slots: Slot[]) {
         return;
       }
 
-      const key = locatorKey(
-        occurrence.locator.path,
-        occurrence.locator.childStart,
-        occurrence.locator.childEnd,
-      );
-      const bucket = map.get(key) ?? [];
-      bucket.push({
-        slotId: slot.id,
-        occurrenceId: occurrence.id,
-        slotName: slot.name,
-        start: occurrence.startOffset,
-        end: occurrence.endOffset,
+      occurrenceFragments(occurrence).forEach((fragment) => {
+        const key = locatorKey(
+          fragment.locator.path,
+          fragment.locator.childStart,
+          fragment.locator.childEnd,
+        );
+        const bucket = map.get(key) ?? [];
+        bucket.push({
+          slotId: slot.id,
+          occurrenceId: occurrence.id,
+          slotName: slot.name,
+          start: fragment.startOffset,
+          end: fragment.endOffset,
+        });
+        map.set(key, bucket);
       });
-      map.set(key, bucket);
     });
   });
 
@@ -185,7 +202,7 @@ function PreviewParagraph({
   onSelectSlotOccurrence: (slotId: string, occurrenceId?: string) => void;
 }) {
   return (
-    <p className={paragraphClassName} style={{ textAlign: block.align }}>
+    <p className={paragraphClassName} data-preview-block-id={block.id} style={{ textAlign: block.align }}>
       {block.segments.length === 0 ? <span className="inline-block min-h-6">&nbsp;</span> : null}
       {block.segments.map((segment) => {
         if (segment.type === "text") {
@@ -377,52 +394,91 @@ export function DocumentPreview(props: DocumentPreviewProps) {
       return;
     }
 
-    const anchorNode = selection.anchorNode;
-    const focusNode = selection.focusNode;
-    if (!anchorNode || !focusNode) {
+    const range = selection.getRangeAt(0);
+    const startNode = range.startContainer;
+    const endNode = range.endContainer;
+    if (!startNode || !endNode) {
       return;
     }
 
-    const anchorElement =
-      anchorNode.nodeType === Node.ELEMENT_NODE
-        ? (anchorNode as Element)
-        : anchorNode.parentElement;
-    const focusElement =
-      focusNode.nodeType === Node.ELEMENT_NODE
-        ? (focusNode as Element)
-        : focusNode.parentElement;
+    const startElement =
+      startNode.nodeType === Node.ELEMENT_NODE ? (startNode as Element) : startNode.parentElement;
+    const endElement =
+      endNode.nodeType === Node.ELEMENT_NODE ? (endNode as Element) : endNode.parentElement;
 
-    const anchorSegment = anchorElement?.closest<HTMLElement>("[data-text-segment-id]");
-    const focusSegment = focusElement?.closest<HTMLElement>("[data-text-segment-id]");
+    const startSegment = startElement?.closest<HTMLElement>("[data-text-segment-id]");
+    const endSegment = endElement?.closest<HTMLElement>("[data-text-segment-id]");
 
-    if (!anchorSegment || !focusSegment) {
+    if (!startSegment || !endSegment) {
       onSelectionRejected?.("当前选区不在可创建槽位的文本片段内。");
       return;
     }
 
-    if (anchorSegment !== focusSegment) {
-      onSelectionRejected?.(
-        "当前选区跨越了多个 Word 文本片段。源文档里这段文字通常被拆成了多个 run，所以不会触发右侧“待创建槽位”。",
-      );
+    const startBlock = startSegment.closest<HTMLElement>("[data-preview-block-id]");
+    const endBlock = endSegment.closest<HTMLElement>("[data-preview-block-id]");
+    if (!startBlock || startBlock !== endBlock) {
+      onSelectionRejected?.("当前选区跨越了多个段落或表格单元格，暂不支持。请在同一段落内选择。");
       return;
     }
 
-    const segment = textSegmentIndex.get(anchorSegment.dataset.textSegmentId ?? "");
-    if (!segment) {
+    const selectedElements = Array.from(
+      startBlock.querySelectorAll<HTMLElement>("[data-text-segment-id]"),
+    ).filter((element) => {
+      if (!(element.textContent ?? "").length) {
+        return false;
+      }
+
+      try {
+        return range.intersectsNode(element);
+      } catch {
+        return false;
+      }
+    });
+
+    if (selectedElements.length === 0) {
       onSelectionRejected?.("当前选区无法映射到可创建槽位的文本片段。");
       return;
     }
 
-    const startOffset = offsetWithinSegment(anchorSegment, selection.anchorNode, selection.anchorOffset);
-    const endOffset = offsetWithinSegment(anchorSegment, selection.focusNode, selection.focusOffset);
-    const rangeStart = Math.min(startOffset, endOffset);
-    const rangeEnd = Math.max(startOffset, endOffset);
+    const fragments = selectedElements.flatMap((element) => {
+      const segment = textSegmentIndex.get(element.dataset.textSegmentId ?? "");
+      if (!segment) {
+        return [];
+      }
 
-    if (rangeEnd <= rangeStart) {
+      const rawStart = element.contains(range.startContainer)
+        ? offsetWithinSegment(element, range.startContainer, range.startOffset)
+        : 0;
+      const rawEnd = element.contains(range.endContainer)
+        ? offsetWithinSegment(element, range.endContainer, range.endOffset)
+        : segment.text.length;
+      const startOffset = Math.max(0, Math.min(rawStart, segment.text.length));
+      const endOffset = Math.max(startOffset, Math.min(rawEnd, segment.text.length));
+
+      if (endOffset <= startOffset) {
+        return [];
+      }
+
+      return [
+        {
+          segment,
+          startOffset,
+          endOffset,
+        },
+      ];
+    });
+
+    if (fragments.length === 0) {
+      onSelectionRejected?.("请选择实际文本内容，不要只选空白字符或不可见标记。");
       return;
     }
 
-    onCreateTextSelection(segment, rangeStart, rangeEnd);
+    onCreateTextSelection({
+      selectedText: fragments
+        .map((fragment) => fragment.segment.text.slice(fragment.startOffset, fragment.endOffset))
+        .join(""),
+      fragments,
+    });
     selection.removeAllRanges();
   };
 

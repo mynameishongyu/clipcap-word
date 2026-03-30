@@ -129,6 +129,34 @@ function getTextFromInlineNode(node: Element) {
   return "";
 }
 
+const transparentInlineNodeNames = new Set([
+  "bookmarkStart",
+  "bookmarkEnd",
+  "commentRangeStart",
+  "commentRangeEnd",
+  "commentReference",
+  "proofErr",
+  "permStart",
+  "permEnd",
+  "moveFromRangeStart",
+  "moveFromRangeEnd",
+  "moveToRangeStart",
+  "moveToRangeEnd",
+]);
+
+const transparentParagraphNodeNames = new Set([
+  "hyperlink",
+  "ins",
+  "moveTo",
+  "customXml",
+  "smartTag",
+  "sdt",
+  "sdtContent",
+  "fldSimple",
+]);
+
+const skippedParagraphNodeNames = new Set(["del", "moveFrom"]);
+
 async function parseDrawingImage(
   drawing: Element,
   relationships: Map<string, string>,
@@ -232,6 +260,10 @@ async function parseRunSegments(
       continue;
     }
 
+    if (transparentInlineNodeNames.has(childName)) {
+      continue;
+    }
+
     await flushTextBuffer();
 
     if (childName === "drawing") {
@@ -246,29 +278,48 @@ async function parseRunSegments(
   return segments;
 }
 
-async function parseParagraph(
-  paragraph: Element,
+async function parseParagraphChildren(
+  children: Element[],
   relationships: Map<string, string>,
   zip: JSZip,
   documentRoot: Element,
 ) {
   const segments: DocSegment[] = [];
 
-  for (const child of getElementChildren(paragraph)) {
+  for (const child of children) {
     const name = localNameOf(child);
 
     if (name === "r") {
       segments.push(...(await parseRunSegments(child, relationships, zip, documentRoot)));
+      continue;
     }
 
-    if (name === "hyperlink") {
-      for (const nested of getElementChildren(child)) {
-        if (localNameOf(nested) === "r") {
-          segments.push(...(await parseRunSegments(nested, relationships, zip, documentRoot)));
-        }
-      }
+    if (skippedParagraphNodeNames.has(name)) {
+      continue;
+    }
+
+    if (transparentParagraphNodeNames.has(name)) {
+      segments.push(
+        ...(await parseParagraphChildren(getElementChildren(child), relationships, zip, documentRoot)),
+      );
     }
   }
+
+  return segments;
+}
+
+async function parseParagraph(
+  paragraph: Element,
+  relationships: Map<string, string>,
+  zip: JSZip,
+  documentRoot: Element,
+) {
+  const segments = await parseParagraphChildren(
+    getElementChildren(paragraph),
+    relationships,
+    zip,
+    documentRoot,
+  );
 
   const block: ParagraphBlock = {
     id: `paragraph:${getElementPath(paragraph, documentRoot).join(".")}`,
