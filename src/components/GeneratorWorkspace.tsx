@@ -46,11 +46,12 @@ interface GeneratorWorkspaceProps {
   onTaskCreated: (taskId: string) => void;
 }
 
-const dataGridTableClassName = "min-w-[760px] w-full border-collapse";
+const dataGridTableClassName = "min-w-full w-max border-collapse";
 const dataGridHeaderCellClassName =
   "border-b border-r border-[var(--mantine-color-dark-4)] bg-[var(--mantine-color-dark-7)] px-2 py-2 text-left text-sm font-semibold text-[var(--mantine-color-dimmed)] last:border-r-0";
 const dataGridCellClassName =
   "border-b border-r border-[var(--mantine-color-dark-4)] px-2 py-2 align-top text-[var(--mantine-color-gray-0)] last:border-r-0";
+const dataGridDataColumnClassName = "min-w-[132px]";
 const dataGridInputClassName =
   "min-h-[38px] w-full rounded-[var(--mantine-radius-sm)] border border-[var(--mantine-color-dark-4)] bg-[var(--mantine-color-dark-6)] px-2.5 py-2 text-[var(--mantine-color-gray-0)] transition hover:border-[var(--mantine-color-dark-2)] focus:border-[var(--mantine-color-gray-6)] focus:bg-[var(--mantine-color-dark-5)] focus:outline-none";
 
@@ -435,7 +436,10 @@ export function GeneratorWorkspace(props: GeneratorWorkspaceProps) {
                   <tr>
                     <th className={`${dataGridHeaderCellClassName} w-[88px]`}>#</th>
                     {dataset.columns.map((column, columnIndex) => (
-                      <th key={`${columnIndex}-${column}`} className={dataGridHeaderCellClassName}>
+                      <th
+                        key={`${columnIndex}-${column}`}
+                        className={`${dataGridHeaderCellClassName} ${dataGridDataColumnClassName}`}
+                      >
                         <input
                           className={dataGridInputClassName}
                           value={column}
@@ -463,7 +467,10 @@ export function GeneratorWorkspace(props: GeneratorWorkspaceProps) {
                           (issue) => issue.rowNumber === rowIndex + 2 && issue.severity === "error",
                         );
                         return (
-                          <td key={`${row.id}-${columnIndex}`} className={dataGridCellClassName}>
+                          <td
+                            key={`${row.id}-${columnIndex}`}
+                            className={`${dataGridCellClassName} ${dataGridDataColumnClassName}`}
+                          >
                             <input
                               className={`${dataGridInputClassName} ${
                                 cellIssue ? "border-[var(--mantine-color-red-7)]" : ""
