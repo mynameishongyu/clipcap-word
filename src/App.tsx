@@ -14,12 +14,18 @@ import {
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { useLiveQuery } from "dexie-react-hooks";
-import { GeneratorWorkspace, type TemplateBundle } from "./components/GeneratorWorkspace";
+import {
+  GeneratorWorkspace,
+  type TemplateBundle,
+} from "./components/GeneratorWorkspace";
 import { TaskCenter } from "./components/TaskCenter";
 import { TemplateEditor } from "./components/TemplateEditor";
 import { db } from "./db";
 import { downloadBlob } from "./lib/download";
-import { showErrorNotification, showSuccessNotification } from "./lib/notifications";
+import {
+  showErrorNotification,
+  showSuccessNotification,
+} from "./lib/notifications";
 import {
   clearAllHistoryData,
   deleteTask,
@@ -27,7 +33,10 @@ import {
   duplicateTemplate,
 } from "./lib/repository";
 import { formatDateTime } from "./lib/time";
-import { createTemplateWorkbookFileName, exportTemplateWorkbook } from "./lib/xlsx";
+import {
+  createTemplateWorkbookFileName,
+  exportTemplateWorkbook,
+} from "./lib/xlsx";
 
 type View = "templates" | "generate" | "tasks";
 
@@ -44,14 +53,16 @@ const VIEW_META: Record<
   templates: {
     eyebrow: "模板治理",
     title: "模板资产控制台",
-    description: "维护版本化模板、标注槽位，并让后续任务始终指向可追溯的模板版本。",
+    description:
+      "维护版本化模板、标注槽位，并让后续任务始终指向可追溯的模板版本。",
     navLabel: "模板管理",
     navCaption: "维护模板版本与槽位",
   },
   generate: {
     eyebrow: "批量处理",
     title: "批量生成工作台",
-    description: "导入结构化数据与图片资源，在本地浏览器内完成校验、替换、生成和归档。",
+    description:
+      "导入结构化数据与图片资源，在本地浏览器内完成校验、替换、生成和归档。",
     navLabel: "批量生成",
     navCaption: "导入数据并创建任务",
   },
@@ -111,7 +122,12 @@ function DashboardMetricCard(props: {
         <Text c="dimmed" fw={700} size="xs" tt="uppercase">
           {label}
         </Text>
-        <Text className="break-words leading-none" ff="monospace" fw={700} size={compactValue ? "lg" : "xl"}>
+        <Text
+          className="break-words leading-none"
+          ff="monospace"
+          fw={700}
+          size={compactValue ? "lg" : "xl"}
+        >
           {value}
         </Text>
         <Text c="dimmed" size="sm">
@@ -130,7 +146,8 @@ export function TemplateBoard(props: {
   onDelete: (templateId: string) => void;
   onDownload: (versionId: string) => void;
 }) {
-  const { templates, onCreate, onEdit, onDuplicate, onDelete, onDownload } = props;
+  const { templates, onCreate, onEdit, onDuplicate, onDelete, onDownload } =
+    props;
 
   return (
     <Stack gap="lg">
@@ -141,7 +158,8 @@ export function TemplateBoard(props: {
           </Text>
           <Title order={2}>模板管理</Title>
           <Text c="dimmed" maw={760}>
-            上传 `.docx` 后在线打槽位，模板按版本保存，历史任务始终绑定到具体版本。
+            上传 `.docx`
+            后在线打槽位，模板按版本保存，历史任务始终绑定到具体版本。
           </Text>
         </Stack>
         <Button onClick={onCreate}>新建模板</Button>
@@ -150,7 +168,8 @@ export function TemplateBoard(props: {
       {templates.length === 0 ? (
         <Paper p="xl" radius="lg" withBorder>
           <Text c="dimmed">
-            还没有模板。先上传一个 `.docx`，然后在预览区选中文本或图片来创建槽位。
+            还没有模板。先上传一个
+            `.docx`，然后在预览区选中文本或图片来创建槽位。
           </Text>
         </Paper>
       ) : (
@@ -160,7 +179,9 @@ export function TemplateBoard(props: {
               <Stack gap="md">
                 <Group align="flex-start" justify="space-between" wrap="nowrap">
                   <div>
-                    <Badge variant="light">版本 {template.currentVersion}</Badge>
+                    <Badge variant="light">
+                      版本 {template.currentVersion}
+                    </Badge>
                     <Title mt="sm" order={4}>
                       {template.name}
                     </Title>
@@ -193,13 +214,23 @@ export function TemplateBoard(props: {
 
                 <Group gap="sm">
                   <Button onClick={() => onEdit(version.id)}>编辑模板</Button>
-                  <Button variant="default" onClick={() => onDownload(version.id)}>
+                  <Button
+                    variant="default"
+                    onClick={() => onDownload(version.id)}
+                  >
                     下载模板表格
                   </Button>
-                  <Button variant="default" onClick={() => onDuplicate(template.id)}>
+                  <Button
+                    variant="default"
+                    onClick={() => onDuplicate(template.id)}
+                  >
                     复制
                   </Button>
-                  <Button color="red" variant="filled" onClick={() => onDelete(template.id)}>
+                  <Button
+                    color="red"
+                    variant="filled"
+                    onClick={() => onDelete(template.id)}
+                  >
                     删除
                   </Button>
                 </Group>
@@ -214,30 +245,41 @@ export function TemplateBoard(props: {
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>("templates");
-  const [editingVersionId, setEditingVersionId] = useState<string | "new" | null>(null);
+  const [editingVersionId, setEditingVersionId] = useState<
+    string | "new" | null
+  >(null);
   const [isClearingHistory, setIsClearingHistory] = useState(false);
 
-  const templates = useLiveQuery(async () => {
-    const templateRows = await db.templates.orderBy("updatedAt").reverse().toArray();
-    const latestVersions = await Promise.all(
-      templateRows.map((template) => db.templateVersions.get(template.latestVersionId)),
-    );
+  const templates =
+    useLiveQuery(async () => {
+      const templateRows = await db.templates
+        .orderBy("updatedAt")
+        .reverse()
+        .toArray();
+      const latestVersions = await Promise.all(
+        templateRows.map((template) =>
+          db.templateVersions.get(template.latestVersionId),
+        ),
+      );
 
-    return templateRows.flatMap((template, index) => {
-      const version = latestVersions[index];
-      return version ? [{ template, version }] : [];
-    });
-  }, []) ?? [];
+      return templateRows.flatMap((template, index) => {
+        const version = latestVersions[index];
+        return version ? [{ template, version }] : [];
+      });
+    }, []) ?? [];
 
-  const tasks = useLiveQuery(async () => {
-    const taskRows = await db.tasks.orderBy("createdAt").reverse().toArray();
-    const artifactRows = await db.artifacts.toArray();
+  const tasks =
+    useLiveQuery(async () => {
+      const taskRows = await db.tasks.orderBy("createdAt").reverse().toArray();
+      const artifactRows = await db.artifacts.toArray();
 
-    return taskRows.map((task) => ({
-      task,
-      artifacts: artifactRows.filter((artifact) => artifact.taskId === task.id),
-    }));
-  }, []) ?? [];
+      return taskRows.map((task) => ({
+        task,
+        artifacts: artifactRows.filter(
+          (artifact) => artifact.taskId === task.id,
+        ),
+      }));
+    }, []) ?? [];
 
   const editingVersion =
     useLiveQuery(
@@ -252,7 +294,10 @@ export default function App() {
     () => ({
       templateCount: templates.length,
       taskCount: tasks.length,
-      artifactCount: tasks.reduce((count, task) => count + task.artifacts.length, 0),
+      artifactCount: tasks.reduce(
+        (count, task) => count + task.artifacts.length,
+        0,
+      ),
     }),
     [tasks, templates.length],
   );
@@ -336,13 +381,19 @@ export default function App() {
   const currentTemplateVersion =
     editingVersionId === "new"
       ? null
-      : templates.find((bundle) => bundle.version.id === editingVersionId)?.version ?? editingVersion;
+      : (templates.find((bundle) => bundle.version.id === editingVersionId)
+          ?.version ?? editingVersion);
 
   const latestTask = tasks[0]?.task ?? null;
   const currentViewMeta = VIEW_META[activeView];
 
   return (
-    <Container className="min-h-screen" fluid px={{ base: "md", md: "xl" }} py="xl">
+    <Container
+      className="min-h-screen"
+      fluid
+      px={{ base: "md", md: "xl" }}
+      py="xl"
+    >
       <Grid align="start" gutter="lg">
         <Grid.Col span={{ base: 12, lg: 3 }}>
           <Stack className="lg:sticky lg:top-6" gap="lg">
@@ -351,21 +402,23 @@ export default function App() {
                 <Text c="dimmed" fw={700} size="xs" tt="uppercase">
                   工作区
                 </Text>
-                {(Object.entries(VIEW_META) as Array<[View, (typeof VIEW_META)[View]]>).map(
-                  ([view, meta]) => (
-                    <NavLink
-                      className="rounded-md"
-                      key={view}
-                      active={activeView === view}
-                      description={meta.navCaption}
-                      label={meta.navLabel}
-                      onClick={() => {
-                        setActiveView(view);
-                        setEditingVersionId(null);
-                      }}
-                    />
-                  ),
-                )}
+                {(
+                  Object.entries(VIEW_META) as Array<
+                    [View, (typeof VIEW_META)[View]]
+                  >
+                ).map(([view, meta]) => (
+                  <NavLink
+                    className="rounded-md"
+                    key={view}
+                    active={activeView === view}
+                    description={meta.navCaption}
+                    label={meta.navLabel}
+                    onClick={() => {
+                      setActiveView(view);
+                      setEditingVersionId(null);
+                    }}
+                  />
+                ))}
               </Stack>
             </Paper>
 
@@ -457,7 +510,9 @@ export default function App() {
                 compactValue
                 description="所有解析、替换和归档都在当前设备内完成，不依赖远程处理链路。"
                 label="最近活动"
-                value={latestTask ? formatDateTime(latestTask.createdAt) : "暂无任务"}
+                value={
+                  latestTask ? formatDateTime(latestTask.createdAt) : "暂无任务"
+                }
               />
             </SimpleGrid>
 
