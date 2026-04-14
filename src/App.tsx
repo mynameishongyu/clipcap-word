@@ -18,6 +18,7 @@ import { GeneratorWorkspace, type TemplateBundle } from "./components/GeneratorW
 import { TaskCenter } from "./components/TaskCenter";
 import { TemplateEditor } from "./components/TemplateEditor";
 import { db } from "./db";
+import { downloadBlob } from "./lib/download";
 import { showErrorNotification, showSuccessNotification } from "./lib/notifications";
 import {
   clearAllHistoryData,
@@ -26,6 +27,7 @@ import {
   duplicateTemplate,
 } from "./lib/repository";
 import { formatDateTime } from "./lib/time";
+import { createTemplateWorkbookFileName, exportTemplateWorkbook } from "./lib/xlsx";
 
 type View = "templates" | "generate" | "tasks";
 
@@ -120,14 +122,15 @@ function DashboardMetricCard(props: {
   );
 }
 
-function TemplateBoard(props: {
+export function TemplateBoard(props: {
   templates: TemplateBundle[];
   onCreate: () => void;
   onEdit: (versionId: string) => void;
   onDuplicate: (templateId: string) => void;
   onDelete: (templateId: string) => void;
+  onDownload: (versionId: string) => void;
 }) {
-  const { templates, onCreate, onEdit, onDuplicate, onDelete } = props;
+  const { templates, onCreate, onEdit, onDuplicate, onDelete, onDownload } = props;
 
   return (
     <Stack gap="lg">
@@ -190,6 +193,9 @@ function TemplateBoard(props: {
 
                 <Group gap="sm">
                   <Button onClick={() => onEdit(version.id)}>编辑模板</Button>
+                  <Button variant="default" onClick={() => onDownload(version.id)}>
+                    下载模板表格
+                  </Button>
                   <Button variant="default" onClick={() => onDuplicate(template.id)}>
                     复制
                   </Button>
@@ -302,6 +308,28 @@ export default function App() {
       );
     } finally {
       setIsClearingHistory(false);
+    }
+  }
+
+  async function handleDownloadTemplateWorkbook(versionId: string) {
+    try {
+      const version =
+        templates.find((bundle) => bundle.version.id === versionId)?.version ??
+        (await db.templateVersions.get(versionId));
+
+      if (!version) {
+        throw new Error("找不到要下载的模板版本。");
+      }
+
+      downloadBlob(
+        exportTemplateWorkbook(version),
+        createTemplateWorkbookFileName(version.name),
+      );
+    } catch (reason) {
+      showErrorNotification(
+        "下载失败",
+        reason instanceof Error ? reason.message : "模板表格下载失败。",
+      );
     }
   }
 
@@ -460,6 +488,9 @@ export default function App() {
                 }
                 onDuplicate={(templateId) => {
                   void handleDuplicate(templateId);
+                }}
+                onDownload={(versionId) => {
+                  void handleDownloadTemplateWorkbook(versionId);
                 }}
                 onEdit={(versionId) => setEditingVersionId(versionId)}
               />

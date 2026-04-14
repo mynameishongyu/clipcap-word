@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { blobToArrayBuffer } from "../blob";
+import { DATASET_FILE_NAME_COLUMN } from "../xlsx";
 import type {
   DatasetDraft,
   GenerationResult,
@@ -205,7 +206,9 @@ function findImageEntry(entries: ImagePackEntry[], fileName: string) {
 }
 
 function fileNameForRow(templateName: string, dataset: DatasetDraft, rowIndex: number) {
-  const columnIndex = dataset.columns.findIndex((column) => normalizeToken(column) === "file_name");
+  const columnIndex = dataset.columns.findIndex(
+    (column) => normalizeToken(column) === DATASET_FILE_NAME_COLUMN,
+  );
   const rawValue = columnIndex === -1 ? "" : String(dataset.rows[rowIndex].cells[columnIndex] ?? "");
   const baseName = rawValue.trim() || `${templateName}-${rowIndex + 1}`;
   return sanitizeFileName(baseName);
