@@ -12,7 +12,8 @@ import {
   Title,
   UnstyledButton,
 } from "@mantine/core";
-import { downloadBlob } from "../lib/download";
+import { downloadBlob, downloadFilesAsZip } from "../lib/download";
+import { showErrorNotification } from "../lib/notifications";
 import { formatDateTime } from "../lib/time";
 import type { ArtifactRecord, TaskRecord, TaskStatus } from "../types";
 
@@ -59,6 +60,7 @@ function statusLabel(status: TaskStatus) {
 export function TaskCenter(props: TaskCenterProps) {
   const { tasks, onDeleteTask } = props;
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [downloadingTaskId, setDownloadingTaskId] = useState<string | null>(null);
   const sorted = useMemo(
     () =>
       [...tasks].sort(
@@ -67,6 +69,31 @@ export function TaskCenter(props: TaskCenterProps) {
       ),
     [tasks],
   );
+
+  async function handleDownloadAllFiles(task: TaskRecord, artifacts: ArtifactRecord[]) {
+    if (artifacts.length === 0) {
+      return;
+    }
+
+    setDownloadingTaskId(task.id);
+
+    try {
+      await downloadFilesAsZip(
+        artifacts.map((artifact) => ({
+          fileName: artifact.fileName,
+          blob: artifact.blob,
+        })),
+        `${task.folderName}-全部文件`,
+      );
+    } catch (reason) {
+      showErrorNotification(
+        "下载失败",
+        reason instanceof Error ? reason.message : "任务文件打包下载失败。",
+      );
+    } finally {
+      setDownloadingTaskId((current) => (current === task.id ? null : current));
+    }
+  }
 
   return (
     <Stack gap="lg">
@@ -107,6 +134,16 @@ export function TaskCenter(props: TaskCenterProps) {
                     </div>
 
                     <Group gap="sm">
+                      <Button
+                        disabled={artifacts.length === 0}
+                        loading={downloadingTaskId === task.id}
+                        variant="default"
+                        onClick={() => {
+                          void handleDownloadAllFiles(task, artifacts);
+                        }}
+                      >
+                        下载全部
+                      </Button>
                       <Button
                         variant="default"
                         onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
